@@ -456,7 +456,9 @@ int main(int argc, char *argv[]) {
 	Pipe p;
 	char host[256];
 	gethostname(host, 256);
-	int in;
+	int in = dup(0);
+	int out = dup(1);
+	int err = dup(2);
 	int lines;
 	char* homeDir = getpwuid(getuid())->pw_dir;
 	strcat(homeDir, "/.ushrc");
@@ -464,7 +466,6 @@ int main(int argc, char *argv[]) {
 	if (fp != NULL) lines = countLines(fp);
 	int ushFd = open(homeDir, O_RDONLY);
 	if (ushFd != -1){
-		in = dup(STDIN_FILENO);
 		dup2(ushFd, STDIN_FILENO);
 		close(ushFd);
 		while(lines > 0){
@@ -474,17 +475,24 @@ int main(int argc, char *argv[]) {
 			freePipe(p);
 			lines--;
 		}
-		dup2(in, STDIN_FILENO);
-		close(in);
 	}
 
 	while ( 1 ) {
+		dup2(in, 0);
+		dup2(out, 1);
+     	dup2(err, 2);
 		signal(SIGINT, SIG_IGN);
 		signal(SIGQUIT, SIG_IGN);
 		signal(SIGTERM, SIG_IGN);
-		printf("%s%% ", host);
-		fflush(stdout);
+		if (isatty(STDIN_FILENO)){
+			printf("%s%% ", host);
+			fflush(stdout);
+			fflush(stderr);
+		}
 		p = parse();
+		if (isatty(STDIN_FILENO) == 0 && !strcmp(p->head->args[0], "end")) {
+			break;
+		}
 		exePipe(p);
 		freePipe(p);
 	}
